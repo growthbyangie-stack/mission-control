@@ -1,0 +1,56 @@
+name: Remote Ops - Mission Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Approved local action to run on Angelo's Mac"
+        required: true
+        type: choice
+        options:
+          - healthcheck
+          - tail_logs
+          - restart_mission_control
+          - rebuild_restart_mission_control
+          - openclaw_status
+          - openclaw_doctor_fix
+      reason:
+        description: "Why this remote operation is being run"
+        required: true
+        type: string
+      confirm:
+        description: "I understand this will run on the self-hosted Mac runner"
+        required: true
+        type: boolean
+
+concurrency:
+  group: mission-control-remote-ops
+  cancel-in-progress: false
+
+jobs:
+  remote-ops:
+    name: Run approved Mission Control remote operation
+    if: ${{ inputs.confirm == true }}
+    runs-on:
+      - self-hosted
+      - mission-control
+    timeout-minutes: 25
+    environment: mission-control-remote-ops
+    steps:
+      - name: Checkout recovery tools
+        uses: actions/checkout@v4
+
+      - name: Record request
+        shell: bash
+        run: |
+          echo "requested_by=${{ github.actor }}"
+          echo "action=${{ inputs.action }}"
+          echo "reason=${{ inputs.reason }}"
+          echo "runner=${{ runner.name }}"
+          echo "repo=${{ github.repository }}"
+          echo "sha=${{ github.sha }}"
+
+      - name: Run approved local action
+        shell: bash
+        run: bash scripts/remote-ops.sh "${{ inputs.action }}"
+

@@ -8,6 +8,7 @@ When Angelo says "Mission Control is down", "the site is down", "gateway is disc
 
 - `docs/MISSION-CONTROL-RECOVERY-RUNBOOK.md`
 - `docs/CODEX-CLOUD-RECOVERY.md`
+- `docs/REMOTE-CONTROL-BRIDGE.md`
 
 The live local deployment normally runs from:
 
@@ -48,3 +49,5 @@ Restart command for the live local service:
 ## Codex Cloud Boundary
 
 Codex cloud can inspect this repo, propose patches, run tests in its sandbox, and open PRs. It cannot directly restart Angelo's Mac or read local-only secrets unless a separate trusted local bridge is configured. If a fix requires local process control, produce exact local commands and explain what a trusted local agent must run.
+
+The first trusted bridge is the GitHub Actions workflow `.github/workflows/remote-ops.yml`, which requires a self-hosted Mac runner labeled `mission-control`. Use only its approved actions unless Angelo explicitly asks to design a stronger break-glass control path.
