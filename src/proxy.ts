@@ -64,6 +64,51 @@ function getImplicitAllowedHosts(): string[] {
   return [...new Set(candidates)]
 }
 
+const LOCAL_CONTROL_UI_CSRF_ORIGINS = [
+  'http://127.0.0.1:3000',
+  'http://localhost:3000',
+  'http://127.0.0.1:3002',
+  'http://localhost:3002',
+  'http://127.0.0.1:5173',
+  'http://localhost:5173',
+]
+
+function parseOrigin(raw: string): URL | null {
+  try {
+    return new URL(raw)
+  } catch {
+    return null
+  }
+}
+
+function isLoopbackHost(raw: string): boolean {
+  const host = normalizeHostname(raw)
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+}
+
+function getConfiguredCsrfAllowedOrigins(): Set<string> {
+  return new Set(
+    String(process.env.MC_CSRF_ALLOWED_ORIGINS || '')
+      .split(',')
+      .map((entry) => parseOrigin(entry.trim())?.origin.toLowerCase())
+      .filter((entry): entry is string => Boolean(entry)),
+  )
+}
+
+function isAllowedCsrfOrigin(origin: string, requestHost: string): boolean {
+  const parsedOrigin = parseOrigin(origin)
+  if (!parsedOrigin) return false
+
+  if (parsedOrigin.host.toLowerCase() === requestHost.toLowerCase()) return true
+
+  const normalizedOrigin = parsedOrigin.origin.toLowerCase()
+  if (getConfiguredCsrfAllowedOrigins().has(normalizedOrigin)) return true
+
+  return LOCAL_CONTROL_UI_CSRF_ORIGINS.includes(normalizedOrigin)
+    && isLoopbackHost(parsedOrigin.hostname)
+    && isLoopbackHost(requestHost)
+}
+
 function hostMatches(pattern: string, hostname: string): boolean {
   const p = normalizeHostname(pattern)
   const h = normalizeHostname(hostname)
@@ -87,10 +132,13 @@ function hostMatches(pattern: string, hostname: string): boolean {
 function nextResponseWithNonce(request: NextRequest): { response: NextResponse; nonce: string } {
   const nonce = crypto.randomBytes(16).toString('base64')
   const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
+  const requestHosts = getRequestHostCandidates(request)
+  const allowUnsafeEval = envFlag('MC_ALLOW_UNSAFE_EVAL') || process.env.NODE_ENV !== 'production' || requestHosts.some(isLoopbackHost)
   const requestHeaders = buildNonceRequestHeaders({
     headers: request.headers,
     nonce,
     googleEnabled,
+    allowUnsafeEval,
   })
   const response = NextResponse.next({
     request: {
@@ -100,7 +148,26 @@ function nextResponseWithNonce(request: NextRequest): { response: NextResponse; 
   return { response, nonce }
 }
 
-function addSecurityHeaders(response: NextResponse, _request: NextRequest, nonce?: string): NextResponse {
+function rewriteWithNonce(request: NextRequest, url: URL): { response: NextResponse; nonce: string } {
+  const nonce = crypto.randomBytes(16).toString('base64')
+  const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
+  const requestHosts = getRequestHostCandidates(request)
+  const allowUnsafeEval = envFlag('MC_ALLOW_UNSAFE_EVAL') || process.env.NODE_ENV !== 'production' || requestHosts.some(isLoopbackHost)
+  const requestHeaders = buildNonceRequestHeaders({
+    headers: request.headers,
+    nonce,
+    googleEnabled,
+    allowUnsafeEval,
+  })
+  const response = NextResponse.rewrite(url, {
+    request: {
+      headers: requestHeaders,
+    },
+  })
+  return { response, nonce }
+}
+
+function addSecurityHeaders(response: NextResponse, request: NextRequest, nonce?: string): NextResponse {
   const requestId = crypto.randomUUID()
   response.headers.set('X-Request-Id', requestId)
   response.headers.set('X-Content-Type-Options', 'nosniff')
@@ -108,8 +175,10 @@ function addSecurityHeaders(response: NextResponse, _request: NextRequest, nonce
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
 
   const googleEnabled = !!(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
+  const requestHosts = getRequestHostCandidates(request)
+  const allowUnsafeEval = envFlag('MC_ALLOW_UNSAFE_EVAL') || process.env.NODE_ENV !== 'production' || requestHosts.some(isLoopbackHost)
   const effectiveNonce = nonce || crypto.randomBytes(16).toString('base64')
-  response.headers.set('Content-Security-Policy', buildMissionControlCsp({ nonce: effectiveNonce, googleEnabled }))
+  response.headers.set('Content-Security-Policy', buildMissionControlCsp({ nonce: effectiveNonce, googleEnabled, allowUnsafeEval }))
 
   return response
 }
@@ -154,9 +223,22 @@ export function proxy(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl
+  const method = request.method.toUpperCase()
+  const publicClientSitePatterns = String(process.env.LINK_PUBLIC_SITE_HOSTS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const isPublicClientSiteHost = publicClientSitePatterns.length > 0
+    && requestHosts.some((hostName) => publicClientSitePatterns.some((pattern) => hostMatches(pattern, hostName)))
+
+  if (pathname === '/' && ['GET', 'HEAD', 'OPTIONS'].includes(method) && isPublicClientSiteHost) {
+    const clientOffersUrl = request.nextUrl.clone()
+    clientOffersUrl.pathname = '/client-offers'
+    const { response, nonce } = rewriteWithNonce(request, clientOffersUrl)
+    return addSecurityHeaders(response, request, nonce)
+  }
 
   // CSRF Origin validation for mutating requests
-  const method = request.method.toUpperCase()
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
     const origin = request.headers.get('origin')
     if (origin) {
@@ -165,15 +247,66 @@ export function proxy(request: NextRequest) {
       const requestHost = request.headers.get('host')?.split(',')[0]?.trim()
         || request.nextUrl.host
         || ''
-      if (originHost && requestHost && originHost !== requestHost) {
+      if (originHost && requestHost && !isAllowedCsrfOrigin(origin, requestHost)) {
         return addSecurityHeaders(NextResponse.json({ error: 'CSRF origin mismatch' }, { status: 403 }), request)
       }
     }
   }
 
-  // Allow login, setup, auth API, docs, and container health probe without session
+  const isPublicAsset = pathname === '/mc-push-sw.js'
+    || pathname === '/manifest.webmanifest'
+    || pathname === '/icon.png'
+    || pathname === '/apple-icon.png'
+    || pathname.startsWith('/brand/')
+    || pathname.startsWith('/site-visuals/')
+
+  // Allow login, setup, auth API, docs, PWA assets, container health probe, and selected local-only read-only surfaces without session.
   const isPublicHealthProbe = pathname === '/api/status' && request.nextUrl.searchParams.get('action') === 'health'
-  if (pathname === '/login' || pathname === '/setup' || pathname.startsWith('/api/auth/') || pathname === '/api/setup' || pathname === '/api/docs' || pathname === '/docs' || isPublicHealthProbe) {
+  const isLocalDecisionBridge = pathname === '/api/local/decision-bridge'
+    && ['GET', 'OPTIONS'].includes(method)
+  const isLocalUiImprovementReconciler = pathname === '/api/local/ui-improvement-reconciler'
+    && ['GET', 'OPTIONS'].includes(method)
+  const isLocalNewsSignals = pathname === '/api/local/news-signals'
+    && ['GET', 'OPTIONS'].includes(method)
+  const isLocalRouteContracts = pathname === '/api/local/route-contracts'
+    && ['GET', 'OPTIONS'].includes(method)
+  const isLocalDashboardRouteContractScout = pathname === '/api/local/dashboard-route-contract-scout'
+    && ['GET', 'POST', 'OPTIONS'].includes(method)
+  const isLocalCronNoiseBudget = pathname === '/api/local/cron-noise-budget'
+    && ['GET', 'POST', 'OPTIONS'].includes(method)
+    && requestHosts.some(isLoopbackHost)
+  const isLocalOperatorBrief = pathname === '/api/local/operator-brief'
+    && (['GET', 'OPTIONS'].includes(method) || (method === 'POST' && requestHosts.some(isLoopbackHost)))
+  const isLocalNewFeatureImprovementScout = pathname === '/api/local/new-feature-improvement-scout'
+    && ['GET', 'POST', 'OPTIONS'].includes(method)
+  const isLocalNewFeatureRadar = pathname === '/api/local/new-feature-radar'
+    && ['GET', 'OPTIONS'].includes(method)
+    && requestHosts.some(isLoopbackHost)
+  const isLocalCustomerCapabilityGaps = pathname === '/api/local/customer-capability-gaps'
+    && ['GET', 'OPTIONS'].includes(method)
+    && requestHosts.some(isLoopbackHost)
+  const isLocalHelperAllowlistCandidates = pathname === '/api/local/helper-allowlist-candidates'
+    && ['GET', 'OPTIONS'].includes(method)
+    && requestHosts.some(isLoopbackHost)
+  const isLocalAgentFocusDirection = pathname === '/api/local/agent-focus-direction'
+    && ['GET', 'POST', 'OPTIONS'].includes(method)
+    && requestHosts.some(isLoopbackHost)
+  const isLocalNotificationHygieneScout = pathname === '/api/local/notification-hygiene-scout'
+    && ['GET', 'POST', 'OPTIONS'].includes(method)
+    && Boolean(request.headers.get('x-mc-local-automation-token')?.trim())
+  const isPresentationShareFrame = pathname === '/api/presentation-share/frame'
+    && ['GET', 'OPTIONS'].includes(method)
+  const isPresentationShareSnapshot = pathname === '/api/presentation-share/snapshot'
+    && ['GET', 'HEAD', 'OPTIONS'].includes(method)
+  const isPresentationShareViewer = pathname.startsWith('/present/')
+    && ['GET', 'HEAD', 'OPTIONS'].includes(method)
+  const isSocialLegalPage = ['/privacy', '/terms', '/data-deletion'].includes(pathname)
+    && ['GET', 'HEAD', 'OPTIONS'].includes(method)
+  const isClientOffersPage = pathname === '/client-offers'
+    && ['GET', 'HEAD', 'OPTIONS'].includes(method)
+  const isClientOffersConsult = pathname === '/api/client-offers/consult'
+    && ['POST', 'OPTIONS'].includes(method)
+  if (isPublicAsset || pathname === '/login' || pathname === '/setup' || pathname.startsWith('/api/auth/') || pathname === '/api/setup' || pathname === '/api/docs' || pathname === '/docs' || isSocialLegalPage || isPublicHealthProbe || isClientOffersPage || isClientOffersConsult || isLocalDecisionBridge || isLocalUiImprovementReconciler || isLocalNewsSignals || isLocalRouteContracts || isLocalDashboardRouteContractScout || isLocalCronNoiseBudget || isLocalOperatorBrief || isLocalNewFeatureImprovementScout || isLocalNewFeatureRadar || isLocalCustomerCapabilityGaps || isLocalHelperAllowlistCandidates || isLocalAgentFocusDirection || isLocalNotificationHygieneScout || isPresentationShareFrame || isPresentationShareSnapshot || isPresentationShareViewer) {
     const { response, nonce } = nextResponseWithNonce(request)
     return addSecurityHeaders(response, request, nonce)
   }
@@ -212,5 +345,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|brand/).*)']
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|brand/|mc-push-sw.js|manifest.webmanifest|icon.png|apple-icon.png).*)']
 }

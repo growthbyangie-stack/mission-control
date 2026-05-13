@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Saved news library</title>
+  <desc id="desc">A polished illustration of saved articles, bookmarks, and topic cards.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#fff7ed"/>
+      <stop offset="0.52" stop-color="#ffedd5"/>
+      <stop offset="1" stop-color="#eff6ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="26" flood-color="#9a3412" flood-opacity="0.13"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <circle cx="1012" cy="612" r="118" fill="#bfdbfe" opacity="0.75"/>
+  <circle cx="180" cy="142" r="96" fill="#fed7aa" opacity="0.9"/>
+  <g filter="url(#shadow)">
+    <rect x="190" y="122" width="820" height="548" rx="42" fill="#ffffff"/>
+    <rect x="248" y="188" width="320" height="394" rx="30" fill="#fff7ed"/>
+    <path d="M494 188v112l-42-26-42 26V188z" fill="#f97316"/>
+    <path d="M300 280h168M300 326h206M300 372h152M300 462h198M300 508h132" stroke="#94a3b8" stroke-width="14" stroke-linecap="round"/>
+    <rect x="628" y="198" width="300" height="86" rx="24" fill="#f8fafc"/>
+    <rect x="628" y="322" width="300" height="86" rx="24" fill="#f8fafc"/>
+    <rect x="628" y="446" width="300" height="86" rx="24" fill="#f8fafc"/>
+    <path d="M668 238h112M668 362h148M668 486h122" stroke="#f97316" stroke-width="12" stroke-linecap="round"/>
+    <path d="M668 258h190M668 382h166M668 506h196" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="888" cy="242" r="18" fill="#fde68a"/>
+    <circle cx="888" cy="366" r="18" fill="#bae6fd"/>
+    <circle cx="888" cy="490" r="18" fill="#bbf7d0"/>
+  </g>
+</svg>

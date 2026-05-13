@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">System monitor health</title>
+  <desc id="desc">A polished illustration of system health charts, gauges, and service status panels.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f0fdfa"/>
+      <stop offset="0.5" stop-color="#ccfbf1"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#134e4a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="24" stdDeviation="26" flood-color="#134e4a" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <circle cx="1006" cy="616" r="122" fill="#99f6e4" opacity="0.86"/>
+  <circle cx="178" cy="154" r="98" fill="#bfdbfe" opacity="0.75"/>
+  <g filter="url(#shadow)">
+    <rect x="164" y="132" width="872" height="516" rx="42" fill="#ffffff"/>
+    <rect x="220" y="184" width="512" height="326" rx="30" fill="url(#screen)"/>
+    <path d="M270 418c54-72 96-28 144-90 44-58 82-12 126-50 34-30 70-22 118 34" fill="none" stroke="#2dd4bf" stroke-width="14" stroke-linecap="round"/>
+    <path d="M270 454c64-38 118-32 172-52 46-16 90 22 154 10" fill="none" stroke="#60a5fa" stroke-width="10" stroke-linecap="round" opacity="0.86"/>
+    <circle cx="312" cy="260" r="34" fill="#14b8a6"/>
+    <circle cx="416" cy="260" r="34" fill="#38bdf8"/>
+    <circle cx="520" cy="260" r="34" fill="#a3e635"/>
+    <rect x="780" y="196" width="190" height="78" rx="22" fill="#f8fafc"/>
+    <rect x="780" y="312" width="190" height="78" rx="22" fill="#f8fafc"/>
+    <rect x="780" y="428" width="190" height="78" rx="22" fill="#f8fafc"/>
+    <circle cx="824" cy="235" r="16" fill="#14b8a6"/>
+    <circle cx="824" cy="351" r="16" fill="#38bdf8"/>
+    <circle cx="824" cy="467" r="16" fill="#a3e635"/>
+    <path d="M858 235h72M858 351h84M858 467h62" stroke="#94a3b8" stroke-width="12" stroke-linecap="round"/>
+  </g>
+</svg>

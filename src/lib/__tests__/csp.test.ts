@@ -6,9 +6,18 @@ describe('buildMissionControlCsp', () => {
     const csp = buildMissionControlCsp({ nonce: 'nonce-123', googleEnabled: false })
 
     expect(csp).toContain(`script-src 'self' 'nonce-nonce-123' 'strict-dynamic'`)
+    expect(csp).not.toContain("'unsafe-eval'")
     expect(csp).toContain("style-src 'self' 'unsafe-inline'")
     expect(csp).toContain("style-src-elem 'self' 'unsafe-inline'")
     expect(csp).toContain("style-src-attr 'unsafe-inline'")
+    expect(csp).toContain("media-src 'self' blob:")
+    expect(csp).toContain("frame-src 'self' https://drive.google.com")
+  })
+
+  it('allows eval only when explicitly requested for the Next.js dev client', () => {
+    const csp = buildMissionControlCsp({ nonce: 'nonce-123', googleEnabled: false, allowUnsafeEval: true })
+
+    expect(csp).toContain("'unsafe-eval'")
   })
 })
 

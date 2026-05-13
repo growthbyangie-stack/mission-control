@@ -372,6 +372,7 @@ See [`.env.example`](.env.example) for the complete list. Key variables:
 | `MISSION_CONTROL_DATA_DIR` | No | Directory for all MC data files (DB, tokens, etc.). Use an absolute path with the standalone server to survive rebuilds. |
 | `MC_CLAUDE_HOME` | No | Path to `~/.claude` directory |
 | `MC_ALLOWED_HOSTS` | No | Host allowlist for production |
+| `LINK_PUBLIC_SITE_HOSTS` | No | Public domains that should show the LINK offers site at `/` while private app routes stay protected |
 | `NEXT_PUBLIC_GATEWAY_OPTIONAL` | No | Run without gateway connection |
 
 *Required for memory browser, log viewer, and gateway features.

@@ -1,19 +1,37 @@
-export function buildMissionControlCsp(input: { nonce: string; googleEnabled: boolean }): string {
-  const { nonce, googleEnabled } = input
+export function buildMissionControlCsp(input: {
+  nonce: string
+  googleEnabled: boolean
+  allowUnsafeEval?: boolean
+}): string {
+  const { nonce, googleEnabled, allowUnsafeEval = false } = input
+  const scriptSources = [
+    `'self'`,
+    `'nonce-${nonce}'`,
+    `'strict-dynamic'`,
+    'blob:',
+    ...(allowUnsafeEval ? [`'unsafe-eval'`] : []),
+    ...(googleEnabled ? ['https://accounts.google.com'] : []),
+  ].join(' ')
+  const frameSources = [
+    `'self'`,
+    ...(googleEnabled ? ['https://accounts.google.com'] : []),
+    'https://drive.google.com',
+  ].join(' ')
 
   return [
     `default-src 'self'`,
     `base-uri 'self'`,
     `object-src 'none'`,
     `frame-ancestors 'none'`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' blob:${googleEnabled ? ' https://accounts.google.com' : ''}`,
+    `script-src ${scriptSources}`,
     `style-src 'self' 'unsafe-inline'`,
     `style-src-elem 'self' 'unsafe-inline'`,
     `style-src-attr 'unsafe-inline'`,
     `connect-src 'self' ws: wss: http://127.0.0.1:* http://localhost:* https://cdn.jsdelivr.net`,
     `img-src 'self' data: blob:${googleEnabled ? ' https://*.googleusercontent.com https://lh3.googleusercontent.com' : ''}`,
+    `media-src 'self' blob:`,
     `font-src 'self' data:`,
-    `frame-src 'self'${googleEnabled ? ' https://accounts.google.com' : ''}`,
+    `frame-src ${frameSources}`,
     `worker-src 'self' blob:`,
   ].join('; ')
 }
@@ -22,9 +40,14 @@ export function buildNonceRequestHeaders(input: {
   headers: Headers
   nonce: string
   googleEnabled: boolean
+  allowUnsafeEval?: boolean
 }): Headers {
   const requestHeaders = new Headers(input.headers)
-  const csp = buildMissionControlCsp({ nonce: input.nonce, googleEnabled: input.googleEnabled })
+  const csp = buildMissionControlCsp({
+    nonce: input.nonce,
+    googleEnabled: input.googleEnabled,
+    allowUnsafeEval: input.allowUnsafeEval,
+  })
 
   requestHeaders.set('x-nonce', input.nonce)
   requestHeaders.set('Content-Security-Policy', csp)
