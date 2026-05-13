@@ -1,3 +1,3 @@
 {
-  "buildCommand": "NODE_OPTIONS=--max-old-space-size=8192 pnpm -s build"
+  "buildCommand": "LINK_PUBLIC_SITE_BUILD=1 node scripts/prune-public-site-build.cjs && NODE_OPTIONS=--max-old-space-size=8192 pnpm -s build"
 }
